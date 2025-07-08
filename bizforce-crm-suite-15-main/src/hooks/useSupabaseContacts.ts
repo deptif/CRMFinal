@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -87,7 +86,7 @@ export const useSupabaseContacts = () => {
       
       console.error('Erro ao buscar contactos:', error);
       
-      if ((error as any).name !== 'AbortError') {
+      if ((error as Error).name !== 'AbortError') {
         setHasError(true);
         toast.error('Erro ao carregar contactos');
       }
@@ -174,6 +173,13 @@ export const useSupabaseContacts = () => {
 
   const deleteContact = useCallback(async (contactId: string) => {
     try {
+      console.log('Iniciando exclusão do contato:', contactId);
+      
+      if (!contactId || typeof contactId !== 'string') {
+        toast.error('ID do contato inválido');
+        return { error: new Error('ID inválido') };
+      }
+      
       const { error } = await supabase
         .from('contacts')
         .delete()
@@ -181,18 +187,24 @@ export const useSupabaseContacts = () => {
 
       if (error) {
         console.error('Erro ao eliminar contacto:', error);
-        toast.error('Erro ao eliminar contacto');
+        toast.error(`Erro ao eliminar contacto: ${error.message}`);
         return { error };
       }
 
       toast.success('Contacto eliminado com sucesso!');
-      setTimeout(() => fetchContacts(), 100);
+      
+      await fetchContacts();
+      
       return { error: null };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao eliminar contacto:', error);
-      toast.error('Erro ao eliminar contacto');
-      return { error };
+      toast.error(`Erro ao eliminar contacto: ${error instanceof Error ? error.message : String(error)}`);
+      return { error: error instanceof Error ? error : new Error(String(error)) };
     }
+  }, [fetchContacts]);
+
+  const refetch = useCallback(() => {
+    fetchContacts();
   }, [fetchContacts]);
 
   useEffect(() => {
@@ -214,7 +226,7 @@ export const useSupabaseContacts = () => {
         abortControllerRef.current.abort();
       }
     };
-  }, []);
+  }, [fetchContacts]);
 
   return {
     contacts,
@@ -223,6 +235,6 @@ export const useSupabaseContacts = () => {
     createContact,
     updateContact,
     deleteContact,
-    refetch: fetchContacts
+    refetch
   };
 };

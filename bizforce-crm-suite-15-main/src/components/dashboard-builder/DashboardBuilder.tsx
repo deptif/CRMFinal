@@ -1,20 +1,32 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDashboardBuilder } from '@/hooks/useDashboardBuilder';
 import { useMockData } from '@/hooks/useMockData';
 import { ComponentLibrary } from './ComponentLibrary';
 import { DashboardCanvas } from './DashboardCanvas';
 import { PropertyPanel } from './PropertyPanel';
 import { DashboardToolbar } from './DashboardToolbar';
-import { ComponentType } from '@/types/dashboard';
+import { ComponentType, DashboardConfig } from '@/types/dashboard';
 import { toast } from 'sonner';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 
 export const DashboardBuilder = () => {
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
   
   const {
     state,
+    isLoading,
+    dashboards,
     createNewDashboard,
     updateLayout,
     addComponent,
@@ -25,11 +37,19 @@ export const DashboardBuilder = () => {
     undo,
     redo,
     saveDashboard,
+    loadDashboard,
+    deleteDashboard,
+    fetchDashboards
   } = useDashboardBuilder();
 
   const { dataSources } = useMockData();
 
   const selectedComponent = state.config?.layout.find(c => c.id === state.selectedComponent) || null;
+
+  // Carregar lista de dashboards ao iniciar
+  useEffect(() => {
+    fetchDashboards();
+  }, [fetchDashboards]);
 
   const handleComponentSelect = (type: ComponentType) => {
     if (!state.config) {
@@ -46,6 +66,21 @@ export const DashboardBuilder = () => {
   const handleNameChange = (name: string) => {
     if (state.config) {
       updateComponent(state.config.id, { name } as any);
+    }
+  };
+
+  const handleSave = () => {
+    saveDashboard();
+  };
+
+  const handleLoad = (dashboardId: string) => {
+    loadDashboard(dashboardId);
+    setShowLoadDialog(false);
+  };
+
+  const handleDelete = (dashboardId: string) => {
+    if (confirm('Tem certeza que deseja excluir este dashboard?')) {
+      deleteDashboard(dashboardId);
     }
   };
 
@@ -78,7 +113,7 @@ export const DashboardBuilder = () => {
       reader.onload = (e) => {
         try {
           const config = JSON.parse(e.target?.result as string);
-          // Here you would load the config into the builder
+          // Aqui você carregaria a configuração no construtor
           toast.success('Dashboard importado!');
         } catch (error) {
           toast.error('Erro ao importar dashboard');
@@ -91,8 +126,21 @@ export const DashboardBuilder = () => {
   };
 
   // Initialize with new dashboard if none exists
-  if (!state.config) {
-    createNewDashboard();
+  useEffect(() => {
+    if (!state.config) {
+      createNewDashboard();
+    }
+  }, [state.config, createNewDashboard]);
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Carregando dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -104,7 +152,8 @@ export const DashboardBuilder = () => {
         canUndo={state.historyIndex > 0}
         canRedo={state.historyIndex < state.history.length - 1}
         onNameChange={handleNameChange}
-        onSave={saveDashboard}
+        onSave={handleSave}
+        onLoad={() => setShowLoadDialog(true)}
         onUndo={undo}
         onRedo={redo}
         onTogglePreview={togglePreviewMode}
@@ -150,6 +199,62 @@ export const DashboardBuilder = () => {
           />
         )}
       </div>
+
+      {/* Load Dashboard Dialog */}
+      <Dialog open={showLoadDialog} onOpenChange={setShowLoadDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Carregar Dashboard</DialogTitle>
+            <DialogDescription>
+              Selecione um dashboard para carregar
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="max-h-[60vh] overflow-y-auto">
+            {dashboards.length === 0 ? (
+              <p className="text-center py-4 text-gray-500">Nenhum dashboard salvo</p>
+            ) : (
+              <div className="space-y-2">
+                {dashboards.map((dashboard: DashboardConfig) => (
+                  <div 
+                    key={dashboard.id} 
+                    className="flex items-center justify-between p-3 border rounded-md hover:bg-gray-50"
+                  >
+                    <div>
+                      <h4 className="font-medium">{dashboard.name}</h4>
+                      <p className="text-sm text-gray-500">
+                        Atualizado em {dashboard.updatedAt.toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleLoad(dashboard.id)}
+                      >
+                        Carregar
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={() => handleDelete(dashboard.id)}
+                      >
+                        Excluir
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLoadDialog(false)}>
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

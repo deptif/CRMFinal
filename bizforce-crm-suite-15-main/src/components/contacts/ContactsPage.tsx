@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,16 +13,31 @@ import {
   Phone,
   Building2,
   User,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { ContactModal } from './ContactModal';
 import { useSupabaseContacts } from '@/hooks/useSupabaseContacts';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Contact } from '@/types';
 
 export const ContactsPage = () => {
-  const { contacts, isLoading, createContact, updateContact, deleteContact } = useSupabaseContacts();
+  const { contacts, isLoading, createContact, updateContact, deleteContact, refetch } = useSupabaseContacts();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingContact, setEditingContact] = useState(null);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const filteredContacts = contacts.filter(contact =>
     `${contact.first_name} ${contact.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -32,7 +46,7 @@ export const ContactsPage = () => {
     contact.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreateContact = async (contactData) => {
+  const handleCreateContact = async (contactData: Omit<Contact, 'id' | 'created_at'>) => {
     try {
       await createContact(contactData);
       setIsModalOpen(false);
@@ -41,12 +55,12 @@ export const ContactsPage = () => {
     }
   };
 
-  const handleEditContact = (contact) => {
+  const handleEditContact = (contact: Contact) => {
     setEditingContact(contact);
     setIsModalOpen(true);
   };
 
-  const handleUpdateContact = async (contactData) => {
+  const handleUpdateContact = async (contactData: Omit<Contact, 'id' | 'created_at'>) => {
     if (!editingContact) return;
     
     try {
@@ -58,11 +72,24 @@ export const ContactsPage = () => {
     }
   };
 
-  const handleDeleteContact = async (contactId) => {
+  const handleDeleteConfirm = (contact: Contact) => {
+    setContactToDelete(contact);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteContact = async () => {
+    if (!contactToDelete) return;
+    
+    setIsDeleting(true);
     try {
-      await deleteContact(contactId);
+      await deleteContact(contactToDelete.id);
+      setIsDeleteDialogOpen(false);
+      setContactToDelete(null);
     } catch (error) {
+      console.error('Erro ao excluir contato:', error);
       // Error já tratado no hook
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -196,7 +223,7 @@ export const ContactsPage = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleDeleteContact(contact.id)}
+                      onClick={() => handleDeleteConfirm(contact)}
                       className="text-red-600 hover:bg-red-50"
                     >
                       Eliminar
@@ -218,6 +245,31 @@ export const ContactsPage = () => {
         onSubmit={editingContact ? handleUpdateContact : handleCreateContact}
         editingContact={editingContact}
       />
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        if (isDeleting) return;
+        setIsDeleteDialogOpen(open);
+        if (!open) {
+          setContactToDelete(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Isto irá eliminar permanentemente o contacto
+              "{contactToDelete?.first_name} {contactToDelete?.last_name}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteContact} disabled={isDeleting}>
+              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -1,7 +1,7 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { DashboardConfig, ComponentLayout, DashboardState } from '@/types/dashboard';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 export const useDashboardBuilder = () => {
   const [state, setState] = useState<DashboardState>({
@@ -12,6 +12,55 @@ export const useDashboardBuilder = () => {
     history: [],
     historyIndex: -1,
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [dashboards, setDashboards] = useState<DashboardConfig[]>([]);
+
+  // Carregar lista de dashboards do Supabase
+  const fetchDashboards = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.log('No session found');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('dashboards')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // Converter formato do banco para o formato da aplicação
+      const formattedDashboards = data.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        layout: item.layout || [],
+        datasources: item.datasources || [],
+        relationships: item.relationships || [],
+        theme: item.theme || 'light',
+        createdAt: new Date(item.created_at),
+        updatedAt: new Date(item.updated_at),
+        userId: item.user_id
+      }));
+
+      setDashboards(formattedDashboards);
+    } catch (error) {
+      console.error('Erro ao buscar dashboards:', error);
+      toast.error('Erro ao carregar dashboards');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Carregar dashboards ao inicializar
+  useEffect(() => {
+    fetchDashboards();
+  }, [fetchDashboards]);
 
   const createNewDashboard = useCallback(() => {
     const newConfig: DashboardConfig = {
@@ -152,44 +201,146 @@ export const useDashboardBuilder = () => {
     });
   }, []);
 
-  const saveDashboard = useCallback(() => {
+  const saveDashboard = useCallback(async () => {
     if (!state.config) return;
 
-    const dashboards = localStorage.getItem('dashboards');
-    const existing = dashboards ? JSON.parse(dashboards) : [];
-    
-    const index = existing.findIndex((d: DashboardConfig) => d.id === state.config!.id);
-    if (index >= 0) {
-      existing[index] = state.config;
-    } else {
-      existing.push(state.config);
+    try {
+      setIsLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error('Você precisa estar logado para salvar o dashboard');
+        return;
+      }
+
+      const dashboardData = {
+        id: state.config.id,
+        name: state.config.name,
+        layout: state.config.layout,
+        datasources: state.config.datasources,
+        relationships: state.config.relationships,
+        theme: state.config.theme,
+        user_id: session.user.id,
+        updated_at: new Date().toISOString()
+      };
+
+      // Verificar se o dashboard já existe
+      const { data: existingDashboard } = await supabase
+        .from('dashboards')
+        .select('id')
+        .eq('id', state.config.id)
+        .single();
+
+      let result;
+      
+      if (existingDashboard) {
+        // Atualizar dashboard existente
+        result = await supabase
+          .from('dashboards')
+          .update(dashboardData)
+          .eq('id', state.config.id);
+      } else {
+        // Criar novo dashboard
+        result = await supabase
+          .from('dashboards')
+          .insert({
+            ...dashboardData,
+            created_at: new Date().toISOString()
+          });
+      }
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      toast.success('Dashboard salvo com sucesso!');
+      fetchDashboards(); // Atualizar lista de dashboards
+    } catch (error) {
+      console.error('Erro ao salvar dashboard:', error);
+      toast.error('Erro ao salvar dashboard');
+    } finally {
+      setIsLoading(false);
     }
+  }, [state.config, fetchDashboards]);
 
-    localStorage.setItem('dashboards', JSON.stringify(existing));
-    toast.success('Dashboard salvo!');
-  }, [state.config]);
+  const loadDashboard = useCallback(async (dashboardId: string) => {
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase
+        .from('dashboards')
+        .select('*')
+        .eq('id', dashboardId)
+        .single();
 
-  const loadDashboard = useCallback((dashboardId: string) => {
-    const dashboards = localStorage.getItem('dashboards');
-    if (!dashboards) return;
+      if (error) {
+        throw error;
+      }
 
-    const existing = JSON.parse(dashboards);
-    const dashboard = existing.find((d: DashboardConfig) => d.id === dashboardId);
+      if (data) {
+        // Converter formato do banco para o formato da aplicação
+        const dashboard: DashboardConfig = {
+          id: data.id,
+          name: data.name,
+          layout: data.layout || [],
+          datasources: data.datasources || [],
+          relationships: data.relationships || [],
+          theme: data.theme || 'light',
+          createdAt: new Date(data.created_at),
+          updatedAt: new Date(data.updated_at),
+          userId: data.user_id
+        };
 
-    if (dashboard) {
-      setState(prev => ({
-        ...prev,
-        config: dashboard,
-        selectedComponent: null,
-        history: [dashboard],
-        historyIndex: 0,
-      }));
-      toast.success('Dashboard carregado!');
+        setState(prev => ({
+          ...prev,
+          config: dashboard,
+          selectedComponent: null,
+          history: [dashboard],
+          historyIndex: 0,
+        }));
+        
+        toast.success('Dashboard carregado com sucesso!');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dashboard:', error);
+      toast.error('Erro ao carregar dashboard');
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
+  const deleteDashboard = useCallback(async (dashboardId: string) => {
+    try {
+      setIsLoading(true);
+      
+      const { error } = await supabase
+        .from('dashboards')
+        .delete()
+        .eq('id', dashboardId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('Dashboard excluído com sucesso!');
+      fetchDashboards(); // Atualizar lista de dashboards
+      
+      // Se o dashboard excluído for o atual, criar um novo
+      if (state.config?.id === dashboardId) {
+        createNewDashboard();
+      }
+    } catch (error) {
+      console.error('Erro ao excluir dashboard:', error);
+      toast.error('Erro ao excluir dashboard');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [state.config, fetchDashboards, createNewDashboard]);
+
   return {
     state,
+    isLoading,
+    dashboards,
     createNewDashboard,
     updateLayout,
     addComponent,
@@ -201,6 +352,8 @@ export const useDashboardBuilder = () => {
     redo,
     saveDashboard,
     loadDashboard,
+    deleteDashboard,
+    fetchDashboards
   };
 };
 
@@ -248,8 +401,7 @@ function getDefaultConfig(componentType: string) {
     behavior: {
       clickable: true,
       hoverable: true,
-      filterable: true,
-      animation: true,
+      interactive: true,
     },
   };
 }

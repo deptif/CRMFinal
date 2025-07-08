@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   name: string;
@@ -177,4 +176,9 @@ export interface Application {
   owner_id: string;
   created_at: Date;
   updated_at: Date;
+  settings?: Record<string, unknown>;
+  objects?: Record<string, unknown>;
+  theme_color?: string;
+  default_view?: string;
+  is_active?: boolean;
 }

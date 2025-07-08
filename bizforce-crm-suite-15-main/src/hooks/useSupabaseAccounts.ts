@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -176,8 +175,14 @@ export const useSupabaseAccounts = () => {
     }
   }, [fetchAccounts]);
 
-  const deleteAccount = useCallback(async (accountId: string) => {
+  const deleteAccount = useCallback(async (accountId: string): Promise<{
+    error: Error | null;
+    message?: string;
+    hasRelatedRecords?: boolean;
+  }> => {
     try {
+      console.log('Iniciando exclusão da conta:', accountId);
+      
       const { data: relatedContacts, error: contactsError } = await supabase
         .from('contacts')
         .select('id')
@@ -189,29 +194,63 @@ export const useSupabaseAccounts = () => {
         return { error: contactsError };
       }
 
+      console.log('Contatos relacionados:', relatedContacts?.length || 0);
+
       if (relatedContacts && relatedContacts.length > 0) {
+        console.log('Conta tem contatos associados, não pode ser excluída');
         toast.error('Não é possível eliminar esta conta pois tem contactos associados. Elimine primeiro os contactos.');
-        return { error: new Error('Account has related contacts') };
+        return { 
+          error: new Error('Account has related contacts'),
+          message: 'Não é possível eliminar esta conta pois tem contactos associados. Elimine primeiro os contactos.',
+          hasRelatedRecords: true
+        };
       }
 
-      const { error } = await supabase
+      console.log('Executando delete no Supabase para a conta:', accountId);
+      
+      const deleteResponse = await supabase
         .from('accounts')
         .delete()
         .eq('id', accountId);
 
+      const { error, status, statusText, data } = deleteResponse;
+      console.log('Resposta completa da exclusão:', {
+        error,
+        status,
+        statusText,
+        data: data || [],
+        count: Array.isArray(data) ? data.length : 0
+      });
+
       if (error) {
         console.error('Erro ao eliminar conta:', error);
-        toast.error('Erro ao eliminar conta');
+        toast.error(`Erro ao eliminar conta: ${error.message}`);
         return { error };
       }
 
+      if (status !== 204 && (!data || (Array.isArray(data) && data.length === 0))) {
+        console.error('Exclusão não realizada, status:', status);
+        toast.error(`Erro ao eliminar conta: A operação não retornou os dados esperados (status ${status})`);
+        return { error: new Error(`Exclusão não realizada (status ${status})`) };
+      }
+
+      console.log('Exclusão bem-sucedida, atualizando estado local');
+      setAccounts(prevAccounts => {
+        const filteredAccounts = prevAccounts.filter(account => account.id !== accountId);
+        console.log('Contas antes:', prevAccounts.length, 'Contas depois:', filteredAccounts.length);
+        return filteredAccounts;
+      });
+      
       toast.success('Conta eliminada com sucesso!');
-      setTimeout(() => fetchAccounts(), 100);
+      
+      console.log('Atualizando lista de contas após exclusão');
+      await fetchAccounts();
+      
       return { error: null };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao eliminar conta:', error);
       toast.error('Erro ao eliminar conta');
-      return { error };
+      return { error: error instanceof Error ? error : new Error(String(error)) };
     }
   }, [fetchAccounts]);
 

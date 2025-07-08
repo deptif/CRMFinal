@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,7 +33,12 @@ export const ApplicationManager = () => {
     description: '',
     icon: '',
     image: '',
-    url: ''
+    url: '',
+    theme_color: '#3b82f6',
+    default_view: 'dashboard',
+    settings: {},
+    objects: {},
+    is_active: true
   });
 
   // Get current user ID
@@ -62,7 +66,12 @@ export const ApplicationManager = () => {
       description: '',
       icon: '',
       image: '',
-      url: ''
+      url: '',
+      theme_color: '#3b82f6',
+      default_view: 'dashboard',
+      settings: {},
+      objects: {},
+      is_active: true
     });
     setEditingApplication(null);
   };
@@ -123,7 +132,12 @@ export const ApplicationManager = () => {
       description: app.description || '',
       icon: app.icon || '',
       image: app.image || '',
-      url: app.url || ''
+      url: app.url || '',
+      theme_color: app.theme_color || '#3b82f6',
+      default_view: app.default_view || 'dashboard',
+      settings: app.settings || {},
+      objects: app.objects || {},
+      is_active: app.is_active || true
     });
     setIsEditDialogOpen(true);
   };

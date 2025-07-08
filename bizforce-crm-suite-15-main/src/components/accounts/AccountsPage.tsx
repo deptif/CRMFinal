@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,16 +14,31 @@ import {
   MapPin,
   Users,
   Euro,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { AccountModal } from './AccountModal';
 import { useSupabaseAccounts } from '@/hooks/useSupabaseAccounts';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Account } from '@/types';
 
 export const AccountsPage = () => {
-  const { accounts, isLoading, createAccount, updateAccount, deleteAccount } = useSupabaseAccounts();
+  const { accounts, isLoading, createAccount, updateAccount, deleteAccount, refetch } = useSupabaseAccounts();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAccount, setEditingAccount] = useState(null);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState('');
+  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
 
   const filteredAccounts = accounts.filter(account =>
     account.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -32,7 +46,7 @@ export const AccountsPage = () => {
     account.owner_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreateAccount = async (accountData) => {
+  const handleCreateAccount = async (accountData: Omit<Account, 'id' | 'created_at'>) => {
     try {
       await createAccount(accountData);
       setIsModalOpen(false);
@@ -41,12 +55,12 @@ export const AccountsPage = () => {
     }
   };
 
-  const handleEditAccount = (account) => {
+  const handleEditAccount = (account: Account) => {
     setEditingAccount(account);
     setIsModalOpen(true);
   };
 
-  const handleUpdateAccount = async (accountData) => {
+  const handleUpdateAccount = async (accountData: Omit<Account, 'id' | 'created_at'>) => {
     if (!editingAccount) return;
     
     try {
@@ -58,11 +72,33 @@ export const AccountsPage = () => {
     }
   };
 
-  const handleDeleteAccount = async (accountId) => {
+  const handleDeleteConfirm = (account: Account) => {
+    setAccountToDelete(account);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!accountToDelete) return;
+    
     try {
-      await deleteAccount(accountId);
+      console.log('Chamando deleteAccount para:', accountToDelete.id);
+      const result = await deleteAccount(accountToDelete.id);
+      
+      if (result.hasRelatedRecords) {
+        console.log('Conta tem registros relacionados, exibindo mensagem de erro');
+        setDeleteErrorMessage(result.message || 'Não é possível eliminar esta conta pois tem registros associados.');
+      } else {
+        console.log('Exclusão bem-sucedida, fechando diálogo');
+        setIsDeleteDialogOpen(false);
+        setAccountToDelete(null);
+        setDeleteErrorMessage('');
+      }
     } catch (error) {
+      console.error('Erro ao excluir conta:', error);
       // Error já tratado no hook
+      setIsDeleteDialogOpen(false);
+      setAccountToDelete(null);
+      setDeleteErrorMessage('');
     }
   };
 
@@ -207,7 +243,7 @@ export const AccountsPage = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleDeleteAccount(account.id)}
+                      onClick={() => handleDeleteConfirm(account)}
                       className="text-red-600 hover:bg-red-50"
                     >
                       Eliminar
@@ -229,6 +265,51 @@ export const AccountsPage = () => {
         onSubmit={editingAccount ? handleUpdateAccount : handleCreateAccount}
         editingAccount={editingAccount}
       />
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        setIsDeleteDialogOpen(open);
+        if (!open) {
+          setDeleteErrorMessage('');
+          setAccountToDelete(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            {deleteErrorMessage ? (
+              <>
+                <AlertDialogTitle className="flex items-center text-red-600">
+                  <AlertCircle className="h-5 w-5 mr-2" />
+                  Não é possível excluir
+                </AlertDialogTitle>
+                <AlertDialogDescription className="space-y-2">
+                  <p>{deleteErrorMessage}</p>
+                  <p className="text-sm text-gray-600">
+                    Você precisa primeiro remover todos os contatos associados a esta conta.
+                  </p>
+                </AlertDialogDescription>
+              </>
+            ) : (
+              <>
+                <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza de que deseja excluir a conta "{accountToDelete?.name}"? Esta ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            {!deleteErrorMessage && (
+              <AlertDialogAction 
+                onClick={() => handleDeleteAccount()}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Excluir
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

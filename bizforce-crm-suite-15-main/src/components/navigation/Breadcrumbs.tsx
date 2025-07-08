@@ -10,9 +10,10 @@ import {
 
 interface BreadcrumbsProps {
   activeSection: string;
+  appName?: string;
 }
 
-export const Breadcrumbs = ({ activeSection }: BreadcrumbsProps) => {
+export const Breadcrumbs = ({ activeSection, appName }: BreadcrumbsProps) => {
   const getSectionName = (section: string) => {
     const sectionNames: Record<string, string> = {
       'dashboard': 'Dashboard',
@@ -51,7 +52,8 @@ export const Breadcrumbs = ({ activeSection }: BreadcrumbsProps) => {
       'advanced-workflows': 'Advanced Workflows',
       'advanced-analytics': 'Advanced Analytics',
       'advanced-integrations': 'Advanced Integrations',
-      'enhanced-mobile': 'Enhanced Mobile'
+      'enhanced-mobile': 'Enhanced Mobile',
+      'application-management': 'Gerenciamento de Aplicações'
     };
     return sectionNames[section] || section;
   };
@@ -60,11 +62,25 @@ export const Breadcrumbs = ({ activeSection }: BreadcrumbsProps) => {
     <Breadcrumb className="mb-4">
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink href="/?section=dashboard" className="flex items-center">
+          <BreadcrumbLink href="/" className="flex items-center">
             <Home className="h-4 w-4 mr-1" />
             Início
           </BreadcrumbLink>
         </BreadcrumbItem>
+        
+        {appName && (
+          <>
+            <BreadcrumbSeparator>
+              <ChevronRight className="h-4 w-4" />
+            </BreadcrumbSeparator>
+            <BreadcrumbItem>
+              <BreadcrumbLink href={`/?section=dashboard&appName=${encodeURIComponent(appName)}`}>
+                {appName}
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          </>
+        )}
+        
         {activeSection !== 'dashboard' && (
           <>
             <BreadcrumbSeparator>

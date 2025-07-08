@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,9 +23,12 @@ import {
   Eye,
   Copy,
   Users,
-  Calendar
+  Calendar,
+  Box
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { menuConfig } from '../sidebar/MenuConfig';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CustomObject {
   id: string;
@@ -60,21 +62,141 @@ export const CustomObjectsManager = () => {
     loadCustomObjects();
   }, []);
 
-  const loadCustomObjects = () => {
-    const stored = localStorage.getItem('custom_objects');
-    if (stored) {
-      const objects = JSON.parse(stored).map((obj: any) => ({
-        ...obj,
-        created_at: new Date(obj.created_at),
-        updated_at: obj.updated_at ? new Date(obj.updated_at) : undefined
-      }));
-      setCustomObjects(objects);
+  const loadCustomObjects = async () => {
+    try {
+      // Primeiro tentamos carregar do Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        const { data, error } = await supabase
+          .from('custom_objects')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          const objects = data.map((obj: any) => ({
+            ...obj,
+            created_at: new Date(obj.created_at),
+            updated_at: obj.updated_at ? new Date(obj.updated_at) : undefined
+          }));
+          setCustomObjects(objects);
+          
+          // Atualizar o menu lateral com os objetos personalizados
+          updateSidebarMenu(objects);
+          return;
+        }
+      }
+      
+      // Fallback para localStorage se não conseguir do Supabase
+      const stored = localStorage.getItem('custom_objects');
+      if (stored) {
+        const objects = JSON.parse(stored).map((obj: any) => ({
+          ...obj,
+          created_at: new Date(obj.created_at),
+          updated_at: obj.updated_at ? new Date(obj.updated_at) : undefined
+        }));
+        setCustomObjects(objects);
+        
+        // Atualizar o menu lateral com os objetos personalizados
+        updateSidebarMenu(objects);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar objetos personalizados:', error);
+      toast.error('Erro ao carregar objetos personalizados');
+      
+      // Fallback para localStorage em caso de erro
+      const stored = localStorage.getItem('custom_objects');
+      if (stored) {
+        const objects = JSON.parse(stored).map((obj: any) => ({
+          ...obj,
+          created_at: new Date(obj.created_at),
+          updated_at: obj.updated_at ? new Date(obj.updated_at) : undefined
+        }));
+        setCustomObjects(objects);
+      }
     }
   };
 
-  const saveCustomObjects = (objects: CustomObject[]) => {
-    localStorage.setItem('custom_objects', JSON.stringify(objects));
-    setCustomObjects(objects);
+  const saveCustomObjects = async (objects: CustomObject[]) => {
+    try {
+      // Salvar no localStorage como fallback
+      localStorage.setItem('custom_objects', JSON.stringify(objects));
+      
+      // Tentar salvar no Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // Para cada objeto, verificar se já existe e atualizar ou inserir
+        for (const obj of objects) {
+          const { data, error } = await supabase
+            .from('custom_objects')
+            .upsert({
+              id: obj.id,
+              name: obj.name,
+              label: obj.label,
+              pluralLabel: obj.pluralLabel,
+              description: obj.description,
+              fields: obj.fields,
+              recordTypes: obj.recordTypes,
+              isDeployed: obj.isDeployed,
+              created_at: obj.created_at.toISOString(),
+              updated_at: obj.updated_at ? obj.updated_at.toISOString() : null,
+              user_id: session.user.id
+            });
+          
+          if (error) throw error;
+        }
+      }
+      
+      setCustomObjects(objects);
+      
+      // Atualizar o menu lateral com os objetos personalizados
+      updateSidebarMenu(objects);
+    } catch (error) {
+      console.error('Erro ao salvar objetos personalizados:', error);
+      toast.error('Erro ao salvar objetos personalizados no banco de dados');
+    }
+  };
+
+  // Função para atualizar o menu lateral com objetos personalizados
+  const updateSidebarMenu = (objects: CustomObject[]) => {
+    try {
+      // Encontrar o grupo "Objetos Personalizados" no menuConfig
+      const customObjectsGroupIndex = menuConfig.findIndex(group => 
+        group.title === 'Objetos Personalizados'
+      );
+      
+      // Se o grupo não existir, criar um novo
+      if (customObjectsGroupIndex === -1) {
+        menuConfig.push({
+          title: 'Objetos Personalizados',
+          items: []
+        });
+      }
+      
+      // Índice atualizado do grupo
+      const groupIndex = customObjectsGroupIndex === -1 ? menuConfig.length - 1 : customObjectsGroupIndex;
+      
+      // Limpar itens existentes
+      menuConfig[groupIndex].items = [];
+      
+      // Adicionar apenas objetos implantados ao menu
+      const deployedObjects = objects.filter(obj => obj.isDeployed);
+      
+      deployedObjects.forEach(obj => {
+        menuConfig[groupIndex].items.push({
+          name: obj.label,
+          icon: Box,
+          section: `custom-${obj.name}`
+        });
+      });
+      
+      console.log('Menu lateral atualizado com objetos personalizados:', menuConfig[groupIndex]);
+    } catch (error) {
+      console.error('Erro ao atualizar menu lateral:', error);
+    }
   };
 
   const resetForm = () => {
@@ -152,11 +274,28 @@ export const CustomObjectsManager = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleDelete = (objectId: string) => {
+  const handleDelete = async (objectId: string) => {
     if (window.confirm('Tem certeza que deseja excluir este objeto personalizado?')) {
-      const updatedObjects = customObjects.filter(obj => obj.id !== objectId);
-      saveCustomObjects(updatedObjects);
-      toast.success('Objeto personalizado removido!');
+      try {
+        // Excluir do Supabase se possível
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+          const { error } = await supabase
+            .from('custom_objects')
+            .delete()
+            .eq('id', objectId);
+          
+          if (error) throw error;
+        }
+        
+        const updatedObjects = customObjects.filter(obj => obj.id !== objectId);
+        saveCustomObjects(updatedObjects);
+        toast.success('Objeto personalizado removido!');
+      } catch (error) {
+        console.error('Erro ao excluir objeto personalizado:', error);
+        toast.error('Erro ao excluir objeto personalizado');
+      }
     }
   };
 
@@ -182,7 +321,15 @@ export const CustomObjectsManager = () => {
     );
     saveCustomObjects(updatedObjects);
     const object = customObjects.find(obj => obj.id === objectId);
-    toast.success(`Objeto ${object?.isDeployed ? 'desativado' : 'ativado'} com sucesso!`);
+    const status = object?.isDeployed ? 'desativado' : 'ativado';
+    toast.success(`Objeto ${status} com sucesso!`);
+    
+    // Se estiver ativando, mostrar mensagem adicional sobre o menu
+    if (!object?.isDeployed) {
+      toast.info('O objeto foi adicionado ao menu lateral!', {
+        duration: 5000
+      });
+    }
   };
 
   return (

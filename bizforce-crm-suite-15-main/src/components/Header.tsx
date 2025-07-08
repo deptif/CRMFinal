@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Bell, Settings, User, LogOut, Building2, Sun, Moon, Menu, AppWindow, Search } from 'lucide-react';
+import { Bell, Settings, User, LogOut, Building2, Sun, Moon, Menu, AppWindow, Search, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,16 +30,26 @@ import { Input } from "@/components/ui/input";
 import { menuConfig } from './sidebar/MenuConfig';
 import type { MenuItem, MenuGroup } from './sidebar/MenuConfig';
 import { getLucideIcon } from '@/lib/utils';
+import type { Application } from '@/types';
 
 interface HeaderProps {
   children?: React.ReactNode;
   onSectionChange: (section: string) => void;
   activeSection: string;
+  activeApp?: Application | null;
+  onExitApp?: () => void;
 }
 
 const ApplicationCard = ({ app, onSectionChange, isActive }) => (
   <div
-    onClick={() => onSectionChange(app.section)}
+    onClick={() => {
+      onSectionChange(app.section);
+      // Fechar o diálogo ao clicar em um aplicativo
+      const dialogCloseButton = document.querySelector('[data-state="open"] [data-dialog-close]');
+      if (dialogCloseButton instanceof HTMLElement) {
+        dialogCloseButton.click();
+      }
+    }}
     className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
       isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
     }`}
@@ -59,7 +68,14 @@ const ApplicationCard = ({ app, onSectionChange, isActive }) => (
 
 const MenuItemButton = ({ item, onSectionChange, isActive }) => (
   <button
-    onClick={() => onSectionChange(item.section)}
+    onClick={() => {
+      onSectionChange(item.section);
+      // Fechar o diálogo ao clicar em um item
+      const dialogCloseButton = document.querySelector('[data-state="open"] [data-dialog-close]');
+      if (dialogCloseButton instanceof HTMLElement) {
+        dialogCloseButton.click();
+      }
+    }}
     className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-left transition-colors ${
       isActive 
         ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
@@ -127,7 +143,7 @@ const MenuContent = ({ activeSection, onSectionChange, dynamicMenuConfig }) => {
         </div>
       </DialogHeader>
       
-      <ScrollArea className="h-[calc(100vh-200px)]">
+      <ScrollArea className="h-[calc(100vh-200px)] max-h-[60vh]">
         <div className="p-6">
           {/* Seção de Aplicativos */}
           {filteredApplications.length > 0 && (
@@ -137,7 +153,7 @@ const MenuContent = ({ activeSection, onSectionChange, dynamicMenuConfig }) => {
                   <span>Todos os aplicativos</span>
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {applicationCards.map((app, index) => (
                   <ApplicationCard
                     key={index}
@@ -158,7 +174,7 @@ const MenuContent = ({ activeSection, onSectionChange, dynamicMenuConfig }) => {
                   <span>Todos os itens</span>
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filteredMenuGroups.map((group: MenuGroup, index: number) => (
                   <div key={index} className="space-y-2">
                     <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
@@ -211,7 +227,7 @@ const getAppDescription = (appName: string): string => {
   return descriptions[appName] || 'Aplicativo personalizado do sistema';
 };
 
-export const Header = ({ children, onSectionChange, activeSection }: HeaderProps) => {
+export const Header = ({ children, onSectionChange, activeSection, activeApp, onExitApp }: HeaderProps) => {
   const { theme, toggleTheme } = useTheme();
   const { user, company, logout } = useAuth();
   const { applications } = useApplications();
@@ -243,31 +259,74 @@ export const Header = ({ children, onSectionChange, activeSection }: HeaderProps
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 h-16 flex items-center justify-between px-6 transition-colors duration-300">
       <div className="flex items-center space-x-4 flex-1">
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
+        {activeApp ? (
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
               size="icon"
-              className="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              onClick={onExitApp}
+              className="mr-2"
             >
-              <Menu className="h-6 w-6" />
+              <ArrowLeft className="h-5 w-5" />
             </Button>
-          </DialogTrigger>
-          <DialogContent className="w-full max-w-6xl h-[80vh] p-0">
-            <MenuContent activeSection={activeSection} onSectionChange={onSectionChange} dynamicMenuConfig={dynamicMenuConfig} />
-          </DialogContent>
-        </Dialog>
+            <div className="flex items-center">
+              <AppWindow className="h-5 w-5 mr-2 text-primary" />
+              <span className="font-medium">{activeApp.name}</span>
+            </div>
+          </div>
+        ) : (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mr-2"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl w-[90vw] h-[80vh] max-h-[90vh] overflow-hidden">
+              <MenuContent
+                activeSection={activeSection}
+                onSectionChange={onSectionChange}
+                dynamicMenuConfig={dynamicMenuConfig}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
+
         {children}
       </div>
-      
-      <div className="flex items-center space-x-4">
+
+      <div className="flex items-center space-x-2">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={toggleTheme}
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-5 w-5" />
+                ) : (
+                  <Moon className="h-5 w-5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{theme === 'dark' ? 'Modo claro' : 'Modo escuro'}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onSectionChange('notifications')}
               >
                 <Bell className="h-5 w-5" />
               </Button>
@@ -276,65 +335,51 @@ export const Header = ({ children, onSectionChange, activeSection }: HeaderProps
               <p>Notificações</p>
             </TooltipContent>
           </Tooltip>
+        </TooltipProvider>
 
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={toggleTheme}
-                className="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-300 relative overflow-hidden"
+                onClick={() => onSectionChange('settings')}
               >
-                <Sun className={`h-5 w-5 transition-all duration-500 ${
-                  theme === 'dark' ? 'rotate-90 scale-0' : 'rotate-0 scale-100'
-                }`} />
-                <Moon className={`absolute h-5 w-5 transition-all duration-500 ${
-                  theme === 'dark' ? 'rotate-0 scale-100' : '-rotate-90 scale-0'
-                }`} />
+                <Settings className="h-5 w-5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{theme === 'light' ? 'Ativar modo escuro' : 'Ativar modo claro'}</p>
+              <p>Configurações</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center space-x-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center transition-colors">
-                <User className="h-4 w-4 text-blue-600 dark:text-blue-300" />
-              </div>
-              <div className="text-left hidden md:block">
-                <p className="text-sm font-medium">{user?.name}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.role}</p>
-              </div>
+            <Button variant="ghost" size="icon">
+              <User className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end">
             <DropdownMenuLabel>
-              <div className="space-y-1">
-                <p className="text-sm font-medium">{user?.name}</p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
+              <div className="flex flex-col">
+                <span>{user?.name || 'Usuário'}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</span>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex items-center">
-              <Building2 className="h-4 w-4 mr-2" />
-              <div>
-                <p className="text-sm font-medium">{company?.name}</p>
-                <p className="text-xs text-gray-500 capitalize">{company?.plan}</p>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onSectionChange('settings')}>
               <Settings className="h-4 w-4 mr-2" />
-              Configurações
+              <span>Configurações</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSectionChange('application-management')}>
+              <AppWindow className="h-4 w-4 mr-2" />
+              <span>Gerenciar Aplicações</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="text-red-600 dark:text-red-400">
+            <DropdownMenuItem onClick={logout}>
               <LogOut className="h-4 w-4 mr-2" />
-              Sair
+              <span>Sair</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

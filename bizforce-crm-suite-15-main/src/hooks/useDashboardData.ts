@@ -1,16 +1,36 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+interface WeeklyDataItem {
+  week: string;
+  revenue: number;
+  target: number;
+}
+
+interface PipelineDistributionItem {
+  name: string;
+  value: number;
+  color: string;
+}
+
+interface DashboardData {
+  totalRevenue: number;
+  qualifiedLeads: number;
+  conversionRate: number;
+  pipelineValue: number;
+  weeklyData: WeeklyDataItem[];
+  pipelineDistribution: PipelineDistributionItem[];
+}
+
 export const useDashboardData = () => {
-  const [dashboardData, setDashboardData] = useState({
+  const [dashboardData, setDashboardData] = useState<DashboardData>({
     totalRevenue: 0,
     qualifiedLeads: 0,
     conversionRate: 0,
     pipelineValue: 0,
-    weeklyData: [] as any[],
-    pipelineDistribution: [] as any[]
+    weeklyData: [],
+    pipelineDistribution: []
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -27,32 +47,35 @@ export const useDashboardData = () => {
         return;
       }
 
-      // Buscar oportunidades
+      // Buscar oportunidades - sem usar funções agregadas na query
       const { data: opportunities, error: oppError } = await supabase
         .from('opportunities')
-        .select('*');
+        .select('id, name, amount, stage, created_at, owner_id');
 
       if (oppError) {
         console.error('Erro ao buscar oportunidades:', oppError);
+        toast.error(`Erro ao buscar oportunidades: ${oppError.message}`);
         // Continue mesmo com erro para não bloquear o dashboard
       }
 
       // Buscar contas
       const { data: accounts, error: accError } = await supabase
         .from('accounts')
-        .select('*');
+        .select('id, name, industry');
 
       if (accError) {
         console.error('Erro ao buscar contas:', accError);
+        toast.error(`Erro ao buscar contas: ${accError.message}`);
       }
 
       // Buscar contactos
       const { data: contacts, error: contError } = await supabase
         .from('contacts')
-        .select('*');
+        .select('id, first_name, last_name, account_id');
 
       if (contError) {
         console.error('Erro ao buscar contactos:', contError);
+        toast.error(`Erro ao buscar contactos: ${contError.message}`);
       }
 
       console.log('Data fetched:', { 
@@ -83,7 +106,7 @@ export const useDashboardData = () => {
 
       // Dados semanais baseados nas oportunidades criadas
       const now = new Date();
-      const weeklyData = [];
+      const weeklyData: WeeklyDataItem[] = [];
       
       for (let i = 6; i >= 0; i--) {
         const weekStart = new Date(now);
@@ -106,7 +129,7 @@ export const useDashboardData = () => {
       }
 
       // Distribuição do pipeline baseada nos dados reais
-      const stageGroups = {
+      const stageGroups: Record<string, number> = {
         lead: 0,
         qualified: 0,
         proposal: 0,
@@ -114,12 +137,13 @@ export const useDashboardData = () => {
       };
 
       (opportunities || []).forEach(opp => {
-        if (opp.stage !== 'closed_won' && opp.stage !== 'closed_lost' && stageGroups.hasOwnProperty(opp.stage)) {
+        if (opp.stage !== 'closed_won' && opp.stage !== 'closed_lost' && 
+            Object.prototype.hasOwnProperty.call(stageGroups, opp.stage)) {
           stageGroups[opp.stage] += opp.amount || 0;
         }
       });
 
-      const pipelineDistribution = [
+      const pipelineDistribution: PipelineDistributionItem[] = [
         { name: 'Lead', value: stageGroups.lead, color: '#8884d8' },
         { name: 'Qualificado', value: stageGroups.qualified, color: '#82ca9d' },
         { name: 'Proposta', value: stageGroups.proposal, color: '#ffc658' },

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,13 +11,24 @@ import {
   Building2,
   FileText,
   Download,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { OpportunityModal } from './OpportunityModal';
 import { useDataExport } from '@/hooks/useDataExport';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useSupabaseOpportunities } from '@/hooks/useSupabaseOpportunities';
 import type { Opportunity } from '@/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const stageColumns = [
   { id: 'lead', title: 'Lead', color: 'bg-gray-100' },
@@ -32,6 +42,8 @@ export const OpportunitiesPage = () => {
   const { opportunities, isLoading, createOpportunity, updateOpportunity, deleteOpportunity } = useSupabaseOpportunities();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [opportunityToDelete, setOpportunityToDelete] = useState<Opportunity | null>(null);
   const { exportData } = useDataExport();
   const { hasPermission } = usePermissions();
 
@@ -69,16 +81,30 @@ export const OpportunitiesPage = () => {
     }
   };
 
-  const handleDeleteOpportunity = async (opportunityId: string) => {
-    if (!confirm('Tem certeza que deseja eliminar esta oportunidade?')) return;
+  const handleDeleteConfirm = (opportunity: Opportunity) => {
+    setOpportunityToDelete(opportunity);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteOpportunity = async () => {
+    if (!opportunityToDelete) return;
     
     try {
-      const result = await deleteOpportunity(opportunityId);
+      console.log('Chamando deleteOpportunity para:', opportunityToDelete.id);
+      const result = await deleteOpportunity(opportunityToDelete.id);
+      
       if (result.error) {
         console.error('Erro ao eliminar oportunidade:', result.error);
+      } else {
+        console.log('Exclusão bem-sucedida, fechando diálogo');
       }
+      
+      setIsDeleteDialogOpen(false);
+      setOpportunityToDelete(null);
     } catch (error) {
       console.error('Erro ao eliminar oportunidade:', error);
+      setIsDeleteDialogOpen(false);
+      setOpportunityToDelete(null);
     }
   };
 
@@ -273,7 +299,7 @@ export const OpportunitiesPage = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleDeleteOpportunity(opportunity.id)}
+                            onClick={() => handleDeleteConfirm(opportunity)}
                             className="text-xs text-red-600 hover:bg-red-50"
                           >
                             Eliminar
@@ -299,6 +325,27 @@ export const OpportunitiesPage = () => {
         onSubmit={editingOpportunity ? handleUpdateOpportunity : handleCreateOpportunity}
         editingOpportunity={editingOpportunity}
       />
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        setIsDeleteDialogOpen(open);
+        if (!open) setOpportunityToDelete(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja eliminar a oportunidade "{opportunityToDelete?.name}"?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteOpportunity} className="bg-red-600 hover:bg-red-700">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

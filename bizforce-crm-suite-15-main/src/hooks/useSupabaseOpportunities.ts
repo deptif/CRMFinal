@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -179,24 +178,89 @@ export const useSupabaseOpportunities = () => {
 
   const deleteOpportunity = useCallback(async (opportunityId: string) => {
     try {
-      const { error } = await supabase
+      console.log('Iniciando exclusão da oportunidade:', opportunityId);
+      
+      // Tentar usar a função RPC primeiro
+      console.log('Tentando usar RPC para excluir a oportunidade');
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc<boolean>('delete_opportunity', {
+          opportunity_id: opportunityId
+        });
+        
+        console.log('Resposta da exclusão RPC:', { data: rpcData, error: rpcError });
+        
+        if (!rpcError && rpcData === true) {
+          console.log('Exclusão via RPC bem-sucedida');
+          
+          // Atualizar o estado local imediatamente
+          setOpportunities(prevOpportunities => {
+            const filteredOpportunities = prevOpportunities.filter(opp => opp.id !== opportunityId);
+            console.log('Oportunidades antes:', prevOpportunities.length, 'Oportunidades depois:', filteredOpportunities.length);
+            return filteredOpportunities;
+          });
+          
+          toast.success('Oportunidade eliminada com sucesso!');
+          
+          // Forçar uma atualização da lista de oportunidades
+          console.log('Atualizando lista de oportunidades após exclusão');
+          await fetchOpportunities();
+          
+          return { error: null };
+        }
+        
+        // Se RPC falhar, continuar com o método padrão
+        console.log('RPC falhou ou retornou false, tentando método padrão');
+      } catch (rpcError) {
+        console.log('Erro ao chamar RPC, tentando método padrão:', rpcError);
+      }
+      
+      // Excluir a oportunidade usando método padrão
+      console.log('Executando delete no Supabase para a oportunidade:', opportunityId);
+      const deleteResponse = await supabase
         .from('opportunities')
         .delete()
         .eq('id', opportunityId);
 
+      const { error, status, statusText, data } = deleteResponse;
+      console.log('Resposta completa da exclusão da oportunidade:', {
+        error,
+        status,
+        statusText,
+        data: data || [],
+        count: Array.isArray(data) ? data.length : 0
+      });
+
       if (error) {
         console.error('Erro ao eliminar oportunidade:', error);
-        toast.error('Erro ao eliminar oportunidade');
+        toast.error(`Erro ao eliminar oportunidade: ${error.message}`);
         return { error };
       }
 
+      if (status !== 204 && (!data || (Array.isArray(data) && data.length === 0))) {
+        console.error('Exclusão da oportunidade não realizada, status:', status);
+        toast.error(`Erro ao eliminar oportunidade: A operação não retornou os dados esperados (status ${status})`);
+        return { error: new Error(`Exclusão não realizada (status ${status})`) };
+      }
+
+      // Atualizar o estado local imediatamente
+      console.log('Exclusão bem-sucedida, atualizando estado local');
+      setOpportunities(prevOpportunities => {
+        const filteredOpportunities = prevOpportunities.filter(opp => opp.id !== opportunityId);
+        console.log('Oportunidades antes:', prevOpportunities.length, 'Oportunidades depois:', filteredOpportunities.length);
+        return filteredOpportunities;
+      });
+      
       toast.success('Oportunidade eliminada com sucesso!');
-      setTimeout(() => fetchOpportunities(), 100);
+      
+      // Forçar uma atualização da lista de oportunidades
+      console.log('Atualizando lista de oportunidades após exclusão');
+      await fetchOpportunities();
+      
       return { error: null };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao eliminar oportunidade:', error);
       toast.error('Erro ao eliminar oportunidade');
-      return { error };
+      return { error: error instanceof Error ? error : new Error(String(error)) };
     }
   }, [fetchOpportunities]);
 

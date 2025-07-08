@@ -40,19 +40,14 @@ export const useSupabaseApplications = () => {
         url: app.url || '',
         owner_id: app.owner_id,
         created_at: new Date(app.created_at),
-        updated_at: new Date(app.updated_at),
-        settings: app.settings ? (app.settings as Record<string, unknown>) : {},
-        objects: app.objects ? (app.objects as Record<string, unknown>) : {},
-        theme_color: app.theme_color || '#3b82f6',
-        default_view: app.default_view || 'dashboard',
-        is_active: app.is_active !== false
+        updated_at: new Date(app.updated_at)
       })) || [];
 
       setApplications(formattedApplications);
       console.log('Applications loaded:', formattedApplications.length);
     } catch (error) {
       if (!mountedRef.current) return;
-      
+
       console.error('Erro ao carregar aplicações:', error);
       setHasError(true);
       toast.error('Erro ao carregar aplicações');
@@ -66,6 +61,15 @@ export const useSupabaseApplications = () => {
 
   const createApplication = useCallback(async (appData: Omit<Application, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      // Obter o usuário atual
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Usuário não autenticado');
+      }
+      
+      const userId = session.user.id;
+      
       const { data, error } = await supabase
         .from('applications')
         .insert([
@@ -76,7 +80,7 @@ export const useSupabaseApplications = () => {
             icon: appData.icon || null,
             image: appData.image || null,
             url: appData.url || null,
-            owner_id: appData.owner_id
+            owner_id: userId // Usar o ID do usuário autenticado
           }
         ])
         .select()
@@ -102,11 +106,11 @@ export const useSupabaseApplications = () => {
 
       setApplications(prev => [newApp, ...prev]);
       toast.success('Aplicação criada com sucesso!');
-      return { data: newApp, error: null };
+      return newApp;
     } catch (error) {
       console.error('Erro ao criar aplicação:', error);
       toast.error('Erro ao criar aplicação');
-      return { data: null, error };
+      throw error;
     }
   }, []);
 
@@ -145,7 +149,7 @@ export const useSupabaseApplications = () => {
         updated_at: new Date(data.updated_at)
       };
 
-      setApplications(prev => prev.map(app => 
+      setApplications(prev => prev.map(app =>
         app.id === appId ? updatedApp : app
       ));
 
@@ -182,10 +186,10 @@ export const useSupabaseApplications = () => {
 
   useEffect(() => {
     if (isInitializedRef.current) return;
-    
+
     mountedRef.current = true;
     isInitializedRef.current = true;
-    
+
     const timeoutId = setTimeout(() => {
       if (mountedRef.current) {
         fetchApplications();
@@ -207,4 +211,4 @@ export const useSupabaseApplications = () => {
     deleteApplication,
     refetch: fetchApplications
   };
-};
+}; 

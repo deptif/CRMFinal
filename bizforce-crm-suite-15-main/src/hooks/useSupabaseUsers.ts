@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -153,24 +152,55 @@ export const useSupabaseUsers = () => {
 
   const deleteUser = useCallback(async (userId: string) => {
     try {
-      const { error } = await supabase
+      console.log('Iniciando exclusão do usuário:', userId);
+      
+      // Excluir o usuário
+      console.log('Executando delete no Supabase para o usuário:', userId);
+      const deleteResponse = await supabase
         .from('profiles')
         .delete()
         .eq('id', userId);
 
+      const { error, status, statusText, data } = deleteResponse;
+      console.log('Resposta completa da exclusão do usuário:', {
+        error,
+        status,
+        statusText,
+        data: data || [],
+        count: Array.isArray(data) ? data.length : 0
+      });
+
       if (error) {
         console.error('Erro ao eliminar utilizador:', error);
-        toast.error('Erro ao eliminar utilizador');
+        toast.error(`Erro ao eliminar utilizador: ${error.message}`);
         return { error };
       }
 
+      if (status !== 204 && (!data || (Array.isArray(data) && data.length === 0))) {
+        console.error('Exclusão do usuário não realizada, status:', status);
+        toast.error(`Erro ao eliminar utilizador: A operação não retornou os dados esperados (status ${status})`);
+        return { error: new Error(`Exclusão não realizada (status ${status})`) };
+      }
+
+      // Atualizar o estado local imediatamente
+      console.log('Exclusão bem-sucedida, atualizando estado local');
+      setUsers(prevUsers => {
+        const filteredUsers = prevUsers.filter(user => user.id !== userId);
+        console.log('Usuários antes:', prevUsers.length, 'Usuários depois:', filteredUsers.length);
+        return filteredUsers;
+      });
+      
       toast.success('Utilizador eliminado com sucesso!');
-      fetchUsers(); // Refresh the list
+      
+      // Forçar uma atualização da lista de usuários
+      console.log('Atualizando lista de usuários após exclusão');
+      await fetchUsers();
+      
       return { error: null };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao eliminar utilizador:', error);
       toast.error('Erro ao eliminar utilizador');
-      return { error };
+      return { error: error instanceof Error ? error : new Error(String(error)) };
     }
   }, [fetchUsers]);
 
