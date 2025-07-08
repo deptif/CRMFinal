@@ -35,8 +35,6 @@ export const useSupabaseData = () => {
         .from('accounts')
         .select(`
           *,
-          contacts(count),
-          opportunities(count, amount.sum()),
           profiles!accounts_owner_id_fkey(name)
         `);
 
@@ -116,8 +114,13 @@ export const useSupabaseData = () => {
       return data?.map(opportunity => ({
         ...opportunity,
         created_at: opportunity.created_at ? new Date(opportunity.created_at) : new Date(),
-        close_date: opportunity.close_date ? new Date(opportunity.close_date) : null,
-        stage: (opportunity.stage as 'qualified' | 'closed_won' | 'lead' | 'proposal' | 'negotiation' | 'closed_lost') || 'lead',
+        close_date: opportunity.close_date ? new Date(opportunity.close_date) : new Date(),
+        stage: (opportunity.stage === 'lead' ? 'Lead' :
+              opportunity.stage === 'qualified' ? 'Qualified' :
+              opportunity.stage === 'proposal' ? 'Proposal' :
+              opportunity.stage === 'negotiation' ? 'Negotiation' :
+              opportunity.stage === 'closed_won' ? 'Closed_Won' :
+              opportunity.stage === 'closed_lost' ? 'Closed_Lost' : 'Lead') as Opportunity['stage'],
         account_name: opportunity.accounts?.name || 'Sem conta',
         contact_name: opportunity.contacts 
           ? `${opportunity.contacts.first_name} ${opportunity.contacts.last_name}`
@@ -179,6 +182,7 @@ export const useSupabaseData = () => {
       if (error) throw error;
       return {
         ...data,
+        created_at: data.created_at ? new Date(data.created_at) : new Date(),
         owner_name: data.profiles?.name || 'Não atribuído'
       };
     } catch (error) {

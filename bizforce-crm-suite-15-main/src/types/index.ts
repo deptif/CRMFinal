@@ -46,7 +46,7 @@ export interface Opportunity {
   contact_id: string;
   contact_name: string;
   amount: number;
-  stage: 'lead' | 'qualified' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost';
+  stage: 'Lead' | 'Qualified' | 'Proposal' | 'Negotiation' | 'Closed_Won' | 'Closed_Lost';
   probability: number;
   close_date: Date;
   owner_id: string;

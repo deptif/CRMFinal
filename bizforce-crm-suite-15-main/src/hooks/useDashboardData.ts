@@ -58,20 +58,20 @@ export const useDashboardData = () => {
         // Continue mesmo com erro para não bloquear o dashboard
       }
 
-      // Buscar contas
-      const { data: accounts, error: accError } = await supabase
+      // Buscar contagem de contas de forma eficiente
+      const { count: accountsCount, error: accError } = await supabase
         .from('accounts')
-        .select('id, name, industry');
+        .select('*', { count: 'exact', head: true });
 
       if (accError) {
         console.error('Erro ao buscar contas:', accError);
         toast.error(`Erro ao buscar contas: ${accError.message}`);
       }
 
-      // Buscar contactos
-      const { data: contacts, error: contError } = await supabase
+      // Buscar contagem de contactos de forma eficiente
+      const { count: contactsCount, error: contError } = await supabase
         .from('contacts')
-        .select('id, first_name, last_name, account_id');
+        .select('*', { count: 'exact', head: true });
 
       if (contError) {
         console.error('Erro ao buscar contactos:', contError);
@@ -80,8 +80,8 @@ export const useDashboardData = () => {
 
       console.log('Data fetched:', { 
         opportunities: opportunities?.length || 0,
-        accounts: accounts?.length || 0,
-        contacts: contacts?.length || 0
+        accounts: accountsCount || 0,
+        contacts: contactsCount || 0
       });
 
       // Calcular métricas baseadas nos dados reais

@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -31,8 +30,8 @@ interface OpportunityModalProps {
 
 export const OpportunityModal = ({ isOpen, onClose, onSubmit, editingOpportunity }: OpportunityModalProps) => {
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<OpportunityFormData>();
-  const { accounts } = useSupabaseAccounts();
-  const { contacts } = useSupabaseContacts();
+  const { accounts, isLoading: isLoadingAccounts } = useSupabaseAccounts();
+  const { contacts, isLoading: isLoadingContacts } = useSupabaseContacts();
   
   const selectedAccountId = watch('account_id');
   const selectedContactId = watch('contact_id');
@@ -59,7 +58,7 @@ export const OpportunityModal = ({ isOpen, onClose, onSubmit, editingOpportunity
         account_id: '',
         contact_id: '',
         amount: 0,
-        stage: 'lead',
+        stage: 'Lead',
         probability: 25,
         close_date: '',
         description: ''
@@ -113,35 +112,51 @@ export const OpportunityModal = ({ isOpen, onClose, onSubmit, editingOpportunity
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="account">Empresa *</Label>
-              <Select value={selectedAccountId} onValueChange={(value) => {
-                setValue('account_id', value);
-                setValue('contact_id', ''); // Reset contact when account changes
-              }}>
+              <Select 
+                value={selectedAccountId} 
+                onValueChange={(value) => {
+                  setValue('account_id', value, { shouldValidate: true });
+                  setValue('contact_id', ''); // Reset contact when account changes
+                }}
+                {...register('account_id', { required: 'Empresa é obrigatória' })}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecionar empresa" />
+                  <SelectValue placeholder={isLoadingAccounts ? "A carregar empresas..." : "Selecionar empresa"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
+                  {isLoadingAccounts ? (
+                    <SelectItem value="loading" disabled>A carregar...</SelectItem>
+                  ) : (
+                    accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
-              {!selectedAccountId && <p className="text-red-500 text-sm">Empresa é obrigatória</p>}
+              {errors.account_id && <p className="text-red-500 text-sm">{errors.account_id.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="contact">Contacto</Label>
-              <Select value={selectedContactId} onValueChange={(value) => setValue('contact_id', value)} disabled={!selectedAccountId}>
+              <Select 
+                value={selectedContactId} 
+                onValueChange={(value) => setValue('contact_id', value)} 
+                disabled={!selectedAccountId || isLoadingContacts}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecionar contacto" />
+                  <SelectValue placeholder={isLoadingContacts ? "A carregar contactos..." : "Selecionar contacto"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableContacts.map((contact) => (
-                    <SelectItem key={contact.id} value={contact.id}>
-                      {contact.first_name} {contact.last_name}
-                    </SelectItem>
-                  ))}
+                  {isLoadingContacts ? (
+                     <SelectItem value="loading" disabled>A carregar...</SelectItem>
+                  ) : (
+                    availableContacts.map((contact) => (
+                      <SelectItem key={contact.id} value={contact.id}>
+                        {contact.first_name} {contact.last_name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -177,12 +192,12 @@ export const OpportunityModal = ({ isOpen, onClose, onSubmit, editingOpportunity
                   <SelectValue placeholder="Selecionar estágio" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="lead">Lead</SelectItem>
-                  <SelectItem value="qualified">Qualificado</SelectItem>
-                  <SelectItem value="proposal">Proposta</SelectItem>
-                  <SelectItem value="negotiation">Negociação</SelectItem>
-                  <SelectItem value="closed_won">Fechado (Ganho)</SelectItem>
-                  <SelectItem value="closed_lost">Fechado (Perdido)</SelectItem>
+                  <SelectItem value="Lead">Lead</SelectItem>
+                  <SelectItem value="Qualified">Qualificado</SelectItem>
+                  <SelectItem value="Proposal">Proposta</SelectItem>
+                  <SelectItem value="Negotiation">Negociação</SelectItem>
+                  <SelectItem value="Closed_Won">Fechado (Ganho)</SelectItem>
+                  <SelectItem value="Closed_Lost">Fechado (Perdido)</SelectItem>
                 </SelectContent>
               </Select>
               {!selectedStage && <p className="text-red-500 text-sm">Estágio é obrigatório</p>}
